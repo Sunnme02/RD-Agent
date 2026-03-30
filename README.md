@@ -514,6 +514,56 @@ For more detail, please refer to our **[🖥️ Live Demo page](https://rdagent.
 ![image](https://github.com/user-attachments/assets/3186f67a-c2f8-4b6b-8bb9-a9b959c13866)
 
 
+## Research Report Knowledge Card Enhancement (Fork Feature)
+
+This fork integrates **research report knowledge cards** into the quant factor hypothesis generation pipeline, transforming candidate factors from "directional ideas" into "research-backed hypotheses" with academic and industry evidence.
+
+### Motivation
+
+The original hypothesis generation relies on simple prompt guidance ("try simple factors first"), lacking domain-specific financial research support. Additionally, the default test period only covers up to 2020. This enhancement:
+- Injects structured knowledge from **2,382 research report cards** (extracted from Chinese brokerage research reports) into the hypothesis generation process
+- Extends the experiment timeline to **2024-2026** for more recent market validation
+- Uses **vector retrieval** (cosine similarity on OpenAI embeddings) to select the most contextually relevant cards each round
+
+### How It Works
+
+```
+cards.json (2382 cards)
+    │
+    ├─ Filter: remove intraday → keep factor/both type → require core_idea
+    │          → confidence >= 0.7 → layer in (因子构建, 假设生成)
+    │
+    ├─ Result: 894 daily-compatible cards across 15 categories
+    │          (momentum, volatility, volume_price, technical, ...)
+    │
+    ├─ Embed: text-embedding-3-small (1536-dim), cached after first call
+    │
+    └─ Each round: embed(current context) → cosine similarity → top-6 cards
+                                                                    │
+                     Injected into RAG field of hypothesis prompt ◄──┘
+```
+
+The query context is built from the current RAG guidance + last round's feedback observations + last hypothesis, so the retrieved cards are **adaptive to the current research direction**.
+
+### Extended Experiment Timeline
+
+| Segment | Period |
+|---------|--------|
+| Training | 2008-01-01 ~ 2021-12-31 |
+| Validation | 2022-01-01 ~ 2023-12-31 |
+| Test/Backtest | 2024-01-01 ~ 2026-01-01 |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `rdagent/scenarios/qlib/proposal/card_rag.py` | **New** - Card loading, filtering, embedding, and vector retrieval |
+| `rdagent/scenarios/qlib/proposal/quant_proposal.py` | Inject card suggestions into RAG for `fin_quant` mode |
+| `rdagent/scenarios/qlib/proposal/factor_proposal.py` | Inject card suggestions into RAG for `fin_factor` mode |
+| `cards.json` | 2,382 knowledge cards extracted from research reports |
+| `.env` | Extended date range configuration |
+
+
 # 🤝 Contributing
 
 We welcome contributions and suggestions to improve R&D-Agent. Please refer to the [Contributing Guide](CONTRIBUTING.md) for more details on how to contribute.
