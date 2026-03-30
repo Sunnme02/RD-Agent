@@ -10,6 +10,7 @@ from rdagent.scenarios.qlib.proposal.bandit import (
     EnvController,
     extract_metrics_from_experiment,
 )
+from rdagent.scenarios.qlib.proposal.card_rag import select_cards
 from rdagent.utils.agent.tpl import T
 
 
@@ -95,6 +96,23 @@ class QlibQuantHypothesisGen(FactorAndModelHypothesisGen):
                 qaunt_rag = "Now, you need to try factors that can achieve high IC (e.g., machine learning-based factors)! Do not include factors that are similar to those in the SOTA factor library!"
         elif action == "model":
             qaunt_rag = "1. In Quantitative Finance, market data could be time-series, and GRU model/LSTM model are suitable for them. Do not generate GNN model as for now.\n2. The training data consists of approximately 478,000 samples for the training set and about 128,000 samples for the validation set. Please design the hyperparameters accordingly and control the model size. This has a significant impact on the training results. If you believe that the previous model itself is good but the training hyperparameters or model hyperparameters are not optimal, you can return the same model and adjust these parameters instead.\n"
+
+        # Build query context for vector retrieval from recent trace
+        card_query_parts = [qaunt_rag or ""]
+        if len(trace.hist) > 0:
+            last_exp, last_fb = trace.hist[-1]
+            if last_fb.observations:
+                card_query_parts.append(last_fb.observations)
+            if last_fb.new_hypothesis:
+                card_query_parts.append(last_fb.new_hypothesis)
+            if last_exp.hypothesis:
+                card_query_parts.append(str(last_exp.hypothesis))
+        card_query = " ".join(card_query_parts)
+
+        # Append research card knowledge to RAG via vector retrieval
+        card_suggestions = select_cards(action=action, round_idx=len(trace.hist), n=6, query=card_query)
+        if card_suggestions:
+            qaunt_rag = (qaunt_rag or "") + card_suggestions
 
         if len(trace.hist) == 0:
             hypothesis_and_feedback = "No previous hypothesis and feedback available since it's the first round."

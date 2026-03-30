@@ -7,6 +7,7 @@ from rdagent.core.proposal import Hypothesis, Scenario, Trace
 from rdagent.scenarios.qlib.experiment.factor_experiment import QlibFactorExperiment
 from rdagent.scenarios.qlib.experiment.model_experiment import QlibModelExperiment
 from rdagent.scenarios.qlib.experiment.quant_experiment import QlibQuantScenario
+from rdagent.scenarios.qlib.proposal.card_rag import select_cards
 from rdagent.utils.agent.tpl import T
 
 QlibFactorHypothesis = Hypothesis
@@ -32,14 +33,31 @@ class QlibFactorHypothesisGen(FactorHypothesisGen):
             else "No previous hypothesis and feedback available since it's the first round."
         )
 
+        base_rag = (
+            "Try the easiest and fastest factors to experiment with from various perspectives first."
+            if len(trace.hist) < 15
+            else "Now, you need to try factors that can achieve high IC (e.g., machine learning-based factors)."
+        )
+        # Build query context for vector retrieval from recent trace
+        card_query_parts = [base_rag]
+        if len(trace.hist) > 0:
+            last_exp, last_fb = trace.hist[-1]
+            if last_fb.observations:
+                card_query_parts.append(last_fb.observations)
+            if last_fb.new_hypothesis:
+                card_query_parts.append(last_fb.new_hypothesis)
+            if last_exp.hypothesis:
+                card_query_parts.append(str(last_exp.hypothesis))
+        card_query = " ".join(card_query_parts)
+
+        card_suggestions = select_cards(action="factor", round_idx=len(trace.hist), n=6, query=card_query)
+        if card_suggestions:
+            base_rag += card_suggestions
+
         context_dict = {
             "hypothesis_and_feedback": hypothesis_and_feedback,
             "last_hypothesis_and_feedback": last_hypothesis_and_feedback,
-            "RAG": (
-                "Try the easiest and fastest factors to experiment with from various perspectives first."
-                if len(trace.hist) < 15
-                else "Now, you need to try factors that can achieve high IC (e.g., machine learning-based factors)."
-            ),
+            "RAG": base_rag,
             "hypothesis_output_format": T("scenarios.qlib.prompts:factor_hypothesis_output_format").r(),
             "hypothesis_specification": T("scenarios.qlib.prompts:factor_hypothesis_specification").r(),
         }
